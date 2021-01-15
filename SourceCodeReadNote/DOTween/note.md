@@ -30,14 +30,16 @@
 
 3. TweenManager，一个Tween的管理类，用stack管理Sequence和用list管理Tweener，并记录分别记录了其中tweener和sequence的总数量，pool数量，active数量，还对不同更新模式的tween进行了计数，Default、Fixed、Late、Manual等。
 
-   主要功能，GetTweener获取一个Tweener，内部会根据pool里面数量是否足够确定是新建还是从pool里面复用，同时根据参数进行匹配，获得一个Tweener，然后AddActiveTween加入到active列表里面。另一个方法GetSequence类似，是获取一个Sequence。Despawn返还一个Tween，DespawnAll返还所有Tween。PurgeAll删除所有active的Tween，并且把Pool里面的Tweenr和Sequence删除。
+   主要功能，GetTweener获取一个Tweener，内部会根据pool里面数量是否足够确定是新建还是从pool里面复用，同时根据参数进行匹配，获得一个Tweener，然后AddActiveTween加入到active列表里面。另一个方法GetSequence类似，是获取一个Sequence。Despawn返还一个Tween，DespawnAll返还所有Tween。PurgeAll删除所有active的Tween，并且把Pool里面的Tweenr和Sequence删除。AddTweenLink和RemoveTweenLink对TweenLink处理TweenLiunk对象。
 
-   Update，分update类型分别对active tween进行更新，并记录要kill的tween。
+   Update，分update类型分别对active tween进行更新，并记录要kill的tween。具体的Update首先根据link的对象更新tween的状态，会根据pass的时间做一定的处理丢弃，比如时间较短就不更新，然后处理delay complete的tween，StartUp Tween，
 
    同时具有对单个Tween的相关操作，
 
-   Callback，
+   Callback，。
 
 4. TweenrCore是一个泛型类，继承Tweener，需要getter和setter的属性类型，
 
 5. Tweener和Sequence都继承Tween，Tween继承ANSSequentiable。
+
+6. TweenSettingExtensions是Tween对象的扩展方法，可以方便的设置Tween的属性，如AutoKill，SetLink把tween链接到一个gameobject上，当gameobject销毁的时候，将对象的行为和tween对象的行为关联。TweenManager内部还维护了Tween到TweenLink的字典，
