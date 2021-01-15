@@ -1,6 +1,6 @@
 1. 通过静态扩展类DOTweenModuleUI来扩展UI相关组件，把UI组件接入DOTween。接入的UI组件
 
-   ![DOTween UI Extension](D:\Repo\kinrongzk.github.io\source code read note\DOTween\DOTween UI Extension.PNG)
+   ![](https://i.loli.net/2021/01/15/IErSOCkXo71btAa.png)
 
    函数的基本样式都是传入要tween的target，最终要达到的值endvalue，以及持续时间，然后返回TweenerCore或者Sequence对象。针对不同的UI组件会具备对应的Tween操作，如下:
 
