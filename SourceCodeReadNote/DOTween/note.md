@@ -422,7 +422,7 @@
 
    ![dotweeneditor](note.assets/dotweeneditor.PNG)
 
-   可以通过present设置是否启用pool，以及该component enable和disable的时候，是play、restart；还是pause、kill之类的。
+   可以通过present设置是否启用pool，以及该component enable和disable的时候，是play、restart；还是pause、kill之类的。注意该面板只管理该target下的所有的tween，不包含child节点下的tween。
 
    **总结：介绍了DOTween editor面板。**
 
