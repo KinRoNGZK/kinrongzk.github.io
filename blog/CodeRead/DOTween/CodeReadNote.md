@@ -1,7 +1,6 @@
 <center><font face="黑体" size=32>DOTween代码阅读笔记</font></center>
 
 
-
 本文记录一下DOTween源码的阅读，简单来说DOTween是一款动画插件，源码地址https://github.com/Demigiant/dotween，相关介绍http://dotween.demigiant.com/。
 
 文章分为以下几个部分：
@@ -440,4 +439,5 @@
    - 使用editor时，如果tween动画和gameobject的生命周期绑定就不要勾选autokill，该tween在对象生命周期可以反复使用，否则就勾上比如只需要对象实例化出来调用一次的动画。
    - 希望反复播放的就不要勾选AutoPlay了，因为他只会播一次，可以代码控制播放，或者DOTweenVisualManager控制播放，需要注意DOTweenVisualManager的有效范围。
    - DOTweenAnimation组件不带参数版本的play是把绑定到target的所有tween播放，希望有区分要附加额外的ID。
+   - 创建出来的tween的update是和component或gameobject的enable、disable无关的，除非用DOTweenVisualManager进行过设置，所以即使物体invisible了，tween动画还是会更新。
 
