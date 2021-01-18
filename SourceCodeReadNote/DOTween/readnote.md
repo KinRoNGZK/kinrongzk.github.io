@@ -420,7 +420,9 @@
 
    ![editor](note.assets/editor.PNG)
 
-   主要分为预览，动画类型设置，相关参数设置，事件设置，以及AutoPlay和AutoKill。AutoPlay在gameobject实例化出来后通过Start方法调用CreateTween把Tween创建出来后就会播放。autokill会设置tween对应的flag，让tween播放完后自动销毁。
+   主要分为预览(具体实现在DOTweenPreviewManagers.cs里面)，动画类型设置，相关参数设置，事件设置，以及AutoPlay和AutoKill。AutoPlay在gameobject实例化出来后通过Start方法调用CreateTween把Tween创建出来后就会播放。autokill会设置tween对应的flag，让tween播放完后自动销毁。
+
+   需要注意一下**ID**这个属性，默认的同一个节点下的target是一样的，即这个gameobject，直接调用DOTweenAnimation的DOPlay的不带参数版本，会只用target去匹配，所以最后会导致节点下所有的DOTweenAnimation都播放，为了区分开这些Tween可以附加额外的ID用来标识它们。
 
    同时还有一个对DOTween全局的设置面板：
 
@@ -428,11 +430,14 @@
 
    可以通过present设置是否启用pool，以及该component enable和disable的时候，是play、restart；还是pause、kill之类的。注意该面板只管理该target下的所有的tween，不包含child节点下的tween。
 
-   **总结：介绍了DOTween editor面板。**
+   额外的，再提一下Editor下的预览功能的相关代码。前面已经提到预览的相关代码在DOTweenPreviewManagers中，通过DOTweenAnimationInspector中的**OnInspectorGUI**中调用**DOTweenPreviewManager**中的PreviewGUI绘制出来，并把Editor自带的target传递过去，通过调用DOTweenAnimation创建一个预览的tween对象，更新是通过**DOTweenEditorPreview**绑定到**EditorApplication.update**的回调触发的。里面会通过DOTween的ManualUpdate来更新TweenManager中的active list。
+
+   **总结：介绍了DOTween editor面板以及Editor下的预览功能。**
 
 9. 一些建议
 
    - 最好开启pool，避免频繁的GC。同时限制游戏中同时存在的tween动画上限，对tween动画的更新做分帧或做优先级处理。
    - 使用editor时，如果tween动画和gameobject的生命周期绑定就不要勾选autokill，该tween在对象生命周期可以反复使用，否则就勾上比如只需要对象实例化出来调用一次的动画。
-   - 希望反复播放的就不要勾选AutoPlay了，因为他只会播一次，可以代码控制播放，或者DOTweenVisualManager控制播放。
+   - 希望反复播放的就不要勾选AutoPlay了，因为他只会播一次，可以代码控制播放，或者DOTweenVisualManager控制播放，需要注意DOTweenVisualManager的有效范围。
+   - DOTweenAnimation组件不带参数版本的play是把绑定到target的所有tween播放，希望有区分要附加额外的ID。
 
