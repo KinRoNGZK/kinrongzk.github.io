@@ -14,6 +14,7 @@
 - TweenManager，管理播放相关
 - Editor
 - 一些建议
+- 总结
 
 1. 静态扩展类相关
 
@@ -440,4 +441,8 @@
    - 希望反复播放的就不要勾选AutoPlay了，因为他只会播一次，可以代码控制播放，或者DOTweenVisualManager控制播放，需要注意DOTweenVisualManager的有效范围。
    - DOTweenAnimation组件不带参数版本的play是把绑定到target的所有tween播放，希望有区分要附加额外的ID。
    - 创建出来的tween的update是和component或gameobject的enable、disable无关的，除非用DOTweenVisualManager进行过设置，所以即使物体invisible了，tween动画还是会更新。
+   
+10. 总结
+
+    
 
