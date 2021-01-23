@@ -100,7 +100,7 @@
 
    **总结：简述了Tween相关的对象，以及用TweenSettingExtensions.cs提供访问Tween属性的接口，通过TweenExtensions.cs提供与Tween播放相关的接口，最终是通过调用TweenManager.cs内部的方法实现的。**
 
-4. IPugOptions相关类。
+4. IPlugOptions相关类。
 
    前面说到的TPlugOptions泛型参数就是实现了IPlugOptions的struct，这个参数提供给我们对插值属性的额外控制，如ColorOptions.cs可以通过设置alphaOnly来确定是否只对其中的alpha分量进行插值。
 
@@ -444,5 +444,11 @@
    
 10. 总结
 
+    **DOTween是一个动画插件，可对unity object属性随时间进行插值，从而达到动画的效果。**
     
+    **主要通过扩展方法(基本没副作用，会稍微增加编译时间)将包装后的方法引入unity object，如包装DOFade、DOScale等，同时通过Monobehaviour脚本DOTweenAnimation将功能集成进unity组件，通过挂载脚本以及DOTweenPreviewManager提供的在editor下预览动画的行为，方便UI编辑和调整动画效果。**
+    
+    **而扩展方法依赖的是DOTween类提供的创建TweenerCore和Sequence的相关接口，DOTween又依赖于TweenManager这个Tween的管理类，该类即管理Tween的创建和缓存也管理Tween的统一更新以及提供真正的Tween播放相关的接口。**
+    
+    **Tween插值的核心是TweenerCore持有的ITweenPlugin，实现对不同属性类型的插值，具体的插值依赖于EaseManager中的Evaluate函数，同时支持AnimationCurve，但是只截取时间轴[0, 1]范围内的部分，因为插值的时候使用duration归一化了。**
 
