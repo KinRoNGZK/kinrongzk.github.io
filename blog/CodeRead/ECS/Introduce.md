@@ -50,13 +50,37 @@ system[7]，主要有5个不同的system接口(ReactiveSystem是通过继承来�
 
 Debug，entitas能够在hierarchy和inspector中显示通过entitas创建的context，以及context下的entity，component，Group之类的信息，可用于debug。
 
-遗憾的是entitas并没有job或brust加速，但是用原生的c# ThreadPool做了一定的并行。同时没有native collector会有一定的gc，component也是class而不是struct。
+**遗憾的是entitas并没有job或brust加速，但是用原生的c# ThreadPool做了一定的并行。同时没有native collector会有一定的gc，component也是class而不是struct。**
 
 ##### Unity ECS
 
-world，组织systems。own entity manager和一个component systems集合。一般创建一个simulation一个render world。
+Unity官方推出了面向数据的设计架构DOTS，Data-Oriented Tech Stack，其中的核心便是ECS。同时unity不断的精简runtime c++层，把很多逻辑和功能用c#和dots重写，更好的利用多核cpu的性能，并为承载AAA游戏的制作提供可能，dots还只是在初期阶段，远远称不上完善，虽然我们不用将整个游戏都用dots搭建，但是在一些特定的系统中使用dots会有极大的收获。
 
-entity，对应archetype。缓存用chunk。
+![unityecs](Introduce.assets/unityecs.PNG)
+
+OK，unity中的ECS的概念上和entitas是一致的。但是，组织和一些术语上存在一定的区别。具体会从以下几个部分介绍：
+
+- archetype，unity中把component的唯一组合，称为一个**archetype**。对一个entity add/remove component会改变entity的archetype。
+
+  ![ArchetypeDiagram](Introduce.assets/ArchetypeDiagram.png)
+
+- memory chunks，archetype确定了memory chunk的分配，entity的archetype确定了该entity的component所在的**chunk**，同一个archetype中所有的entity的component在同一个chunk list中，一个chunk满了，新建一个chunk添加到list中，并用来放置对应的component。对entity add/remove component会改变entity的archetype，同时也会把entity对应的component从chunk中移到另一个chunk中去。entity的component并不保证有序，比如后加入的entity的component一定在之前的entity的component后面，因为移除entity的时候，chunk会产生空洞，这个时候会用末尾的component填补空洞。
+
+  ![ArchetypeChunkDiagram](Introduce.assets/ArchetypeChunkDiagram.png)
+
+- entity query，查询指定components的entity只需要找到对应的archetype就行了，不需要每个entity去遍历。同样有指定component的匹配规则。如All、Any、None，返回一个chunk的列表，然后我们可以遍历chunk中的components，如**IJobChunk**，**IJobForEach**或者foreach。
+
+- Jobs，可以通过job system利用多线程来并行化一些处理，ECS提供JobComponentSystem，IJobForEach，IJobChunk，IJobForEachWithEntity等。ECS job会用到**EntityQuery**对象，其中不仅包含对应的components，也定义了read-only，read-write访问标识，标识确定了job的处理，如read same data可以全部并行，而一个job write data，另一个read data，则只能顺序执行。对于这种顺序执行的jobs，需要通过**JobHandle**设置依赖。
+
+- system organization，system通过两个维度组织，world和group，默认情况下ecs会创建一个default world并包含一些预定义的group，把所有的system初始化并加入到simulation group中。group也是system，所以我们可以组合嵌套的方式灵活的组织我们的system。可以定义system的更新顺序，如果不设定system就会以**确定的顺序**执行。
+
+- ecs authoring，指出我们可以用gameobject+monobehaviour的方式构建我们的游戏，然后通过一个conversion system来把他们转换为entities。
+
+接下来就是详细的介绍各个部分的相关功能：
+
+Entities：entity具有一个ID，
+
+world，组织systems。own entity manager和一个component systems集合。一般创建一个simulation一个render world。
 
 component，general purpose components，shared components(placed in the same chunk)，system state components，dynamic buffer components，chunk components。
 
