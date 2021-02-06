@@ -108,17 +108,264 @@ Component：数据的抽象。
   - 可以使用EntityQuery.SetFilter迭代拥有特定ShardComponentData的entities。也可通过EntityManger.GetAllUniqueSharedComponents获取所有的SharedComponentData。
   - sharedcomponentdata是自动引用计数的，应当尽量少的修改sharedcomponentdata，内部会使用memcpy将chunk data拷贝到另一个chunk。
 
-- system state component——SystemStateComponentData，可用来维护system内部的资源，
+- system state component——SystemStateComponentData。
 
+  - entity的删除流程，发现所有的component，删除这些component，回收entityid。但是system state component不会被移除，给了对应的system后续处理entity的机会，system state component给了system处理component变化的能力。因为unity ecs有一个重要的设计理念**no callback**。
+  - 经常的使用模式是，提供componentdata对应的systemcomponentdata，在对应的system，如果筛选出具有componentdata的entity而没有systemcomponentdata的entity表明是刚添加componentdata，这个时候可以添加systemcomponentdata，并设置为正确的internal state，而在删除componentdata的时候，由于systemcomponentdata的存在，导致entity不会被回收，这个时候可以找到那些没有componentdata又具有systemcomponentdata的entity，表示是已经被销毁的entity，我们可以删除systemcomponentdata并做一些额外的处理。可见systemcomponentdata主要是**配合componentdata更方便的query entity**。
 
+- SystemStateSharedComponentData和systemcomponentdata类似，同样多个entity可以共享componentdata。
 
-component，general purpose components，shared components(placed in the same chunk)，system state components，dynamic buffer components，chunk components。
+- dynamic buffer component，提供一个容量可变的buffer，内存可能会在托管堆中，但是都是自动管理的，在component remove的死后会自动的释放。使用上我们不直接声明该buffer，而是声明我们会放在buffer中的element type，继承自**IBufferElementData**，ECS会把element type也纳入archetype中。使用如下：
 
-system，component system，job component system，entity command buffer。
+  ```c#
+  entityManager.AddBuffer<MyBufferElement>(entity);
+  DynamicBuffer<MyBufferElement> buffer = entityManager.GetBuffer<MyBufferElement>(entity);
+  var intBuffer = entityManager.GetBuffer<MyBufferElement>().Reinterpret<int>();
+  ```
 
-system update order，
+- chunk component data，是chunk共享的数据，如我们可以为一个chunk中的数据创建共享的bounding box。修改entity chunk component data的值会对chunk中所有的entity都生效，如果修改到了entity的archetype导致entity移入另一个chunk中，chunk中原有的chunk data会保持，如果chunk原来没有entity，那么会使用entity的chunk data。chunk component data有单独的接口，一般命名为XXXChunkXXX，因为ChunkComponent同Component都是实现IComponentData。
 
-accessing entity data，IJobForEach，IJobChunk，ForEach，Manual，EntityQuery
+  Create chunk component:
+
+  ```c#
+  EntityManager.AddChunkComponentData<ChunkComponentA>(entity);
+  
+  EntityQueryDesc ChunksWithoutComponentADesc = new EntityQueryDesc()
+  {
+      None = new ComponentType[] {ComponentType.ChunkComponent<ChunkComponentA>()}
+  };
+  ChunksWithoutChunkComponentA = GetEntityQuery(ChunksWithoutComponentADesc);
+  EntityManager.AddChunkComponentData<ChunkComponentA(ChunksWithoutChunkComponentA,
+          new ChunkComponentA() {Value = 4});
+  
+  ComponentType[] compTypes = {ComponentType.ChunkComponent<ChunkComponentA>(),
+                               ComponentType.ReadOnly<GeneralPurposeComponentA>()};
+  var entity = EntityManager.CreateEntity(compTypes);
+  ```
+
+  Read chunk component:
+
+  ```c#
+  chunkComponentValue = EntityManager.GetChunkComponentData<ChunkComponentA>(entity);
+  
+  Entities.WithAll(ComponentType.ChunkComponent<ChunkComponentA>()).ForEach(
+      (Entity entity) =>
+  {
+      var compValue = EntityManager.GetChunkComponentData<ChunkComponentA>(entity);
+      //...
+  });
+  
+  var chunks = ChunksWithChunkComponentA.CreateArchetypeChunkArray(Allocator.TempJob);
+  foreach (var chunk in chunks)
+  {
+      var compValue = EntityManager.GetChunkComponentData<ChunkComponentA>(chunk);
+      //..
+  }
+  chunks.Dispose();
+  
+  
+  ```
+
+  Update chunk component:有两种方式更新，一种是在main thread，一种是通过IJobChunk。
+
+  ```c#
+  EntityManager.SetChunkComponentData<ChunkComponentA>(chunk, 
+  new ChunkComponentA(){Value = 7});
+  
+  var entityChunk =EntityManager.GetChunk(entity);
+  EntityManager.SetChunkComponentData<ChunkComponentA>(entityChunk, new ChunkComponentA(){Value = 8});
+  
+  [BurstCompile]
+  struct ChunkComponentCheckerJob : IJobChunk
+  {
+      public ArchetypeChunkComponentType<ChunkComponentA> ChunkComponentATypeInfo;
+      public void Execute(ArchetypeChunk chunk, int chunkIndex, int firstEntityIndex)
+      {
+          var compValue = chunk.GetChunkComponentData(ChunkComponentATypeInfo);
+          //...
+          var squared = compValue.Value * compValue.Value;
+          chunk.SetChunkComponentData(ChunkComponentATypeInfo, 
+                                      new ChunkComponentA(){Value= squared});
+      }
+  }
+  ```
+
+  Delete chunk component: 可以从entity上移除chunk component，或者移除所有的chunks上的chunk component。
+
+  Use chunk component in a query：
+
+  ```c#
+  EntityQueryDesc ChunksWithChunkComponentADesc = new EntityQueryDesc()
+  {
+      All = new ComponentType[]{ComponentType.ChunkComponent<ChunkComponentA>()}
+  };
+  
+  Entities.WithAll(ComponentType.ChunkComponentReadOnly<ChunkCompA>())
+          .ForEach((Entity ent) =>
+  {
+      var chunkComponentA = EntityManager.GetChunkComponentData<ChunkCompA>(ent);
+  });
+  ```
+
+system：逻辑——更新component的数据和状态，可以用system attribute控制system所在的group和执行order。lifecycle函数：
+
+![systemlifecycle](Introduce.assets/systemlifecycle.PNG)
+
+具体有以下的system：
+
+![system](Introduce.assets/system-1612589809248.PNG)
+
+- ComponentSystem，处理**EntityQuery**查询出来的entity。
+
+- JobComponentSystem，具备自动的job依赖管理，主要是读写同一个component依赖，所以job调用会返回一个JobHandle，并且OnUpdate的时候传递给下一个job调用处，这样构造job的时候就有读写同一个component的相关job信息了，并构造出了依赖。具体的依赖构造，首先每个system中的job会声明读写的component，而entitymanager中会维护读写读写component的job信息，所以如果A system写了component C，而A之后的system B要读取component C，就会从entitysystem找到对应的job，然后作为依赖传递给B，也就是告诉B，你构建的job需要在依赖的job执行完毕后才能执行。需要注意的是如果同时有一个ComponentSystem访问同样的数据，则会stall到关联的job都执行完毕后执行。依赖的管理是保守的，可以在适当的时候把system划分减少没有必要的依赖。**sync point**，CreateEntity，Instantiate，Destroy，AddComponent，RemoveComponent，SetSharedComponentData都具有同步点，所以调用这些方法，会stall到所有的job都完成。
+
+- entity command buffer——queue changes，主要解决job中不能访问EntityManager和访问EntityManager如创建entity会使所有的array和entityquery无效。对于main thread中的component system可以使用PostUpdateCommand而且是自动call的，而job必须从main thread中获取EntityCommandBuffer，job中记录变化后，在main thread中EntityCommandBufferSystem更新的时候会execute command。在group中会有两个entity command buffer，为了最小化sync points，最好使用这两个默认的buffer而不是自己新建。EntityCommandBuffer为了线程安全会使用Concurrent接口，如果只需要在一个thread中调用就不用concurrent。同时我们需要告诉barrier什么时候command可以执行，所以会把依赖的job通过AddJobHandleForProducer注入。
+
+- system update order，system首先通过UpdateInGroup设置依赖的group，然后通过UpdateBefore和UpdateAfter确定在group中的更新顺序。Default world包含以下的Group：
+
+  ![defaultgroup](Introduce.assets/defaultgroup.PNG)
+
+  可通过实现ICustomBootstrap方法自定义world和group。
+
+Access entity data：ecs提供多种访问和遍历entity的方式。
+
+![for](Introduce.assets/for.PNG)
+
+- IJobForEach定义了system关注的component。
+
+```c#
+[ExcludeComponent(typeof(Frozen))]
+[RequireComponentTag(typeof(Gravity))]
+[BurstCompile]
+struct RotationSpeedJob : IJobForEach<RotationQuaternion, RotationSpeed>
+    
+public void Execute(ref RotationQuaternion rotationQuaternion, [ReadOnly] ref RotationSpeed rotSpeed){}
+```
+
+还有修饰execute方法的标签：
+
+![attr](Introduce.assets/attr.PNG)
+
+需要注意一下ChangedFilter是以chunk为单位，不是per-entity。
+
+- IJobForEachWithEntity，只是execute的签名不同，会有额外的entity和index。index可用来保证在多线程job下的确定性。
+
+- IJobChunk，增对chunk的过滤和处理。
+
+```c#
+[BurstCompile]
+struct RotationSpeedJob : IJobChunk
+{
+   public float DeltaTime;
+   public ArchetypeChunkComponentType<RotationQuaternion> RotationType;
+   [ReadOnly] public ArchetypeChunkComponentType<RotationSpeed> RotationSpeedType;
+
+   public void Execute(ArchetypeChunk chunk, int chunkIndex, int firstEntityIndex)
+   {
+       //...
+   }
+}
+
+var chunkRotations = chunk.GetNativeArray(RotationType);
+var chunkRotationSpeeds = chunk.GetNativeArray(RotationSpeedType);
+
+for (var i = 0; i < chunk.Count; i++)
+{
+   var rotation = chunkRotations[i];
+   var rotationSpeed = chunkRotationSpeeds[i];
+
+   // Rotate something about its up vector at the speed given by RotationSpeed.
+   chunkRotations[i] = new RotationQuaternion
+   {
+       Value = math.mul(math.normalize(rotation.Value),
+           quaternion.AxisAngle(math.up(), rotationSpeed.RadiansPerSecond * DeltaTime))
+   };
+
+```
+
+同时可以用changed filter只对有变换的chunk进行处理，也可以通过ArchetypeChunk.DidChange来判断是否变化了。
+
+```c#
+struct UpdateJob : IJobChunk
+{
+   public ArchetypeChunkComponentType<InputA> InputAType;
+   public ArchetypeChunkComponentType<InputB> InputBType;
+   [ReadOnly] public ArchetypeChunkComponentType<Output> OutputType;
+   public uint LastSystemVersion;
+
+   public void Execute(ArchetypeChunk chunk, int chunkIndex, int firstEntityIndex)
+   {
+       var inputAChanged = chunk.DidChange(InputAType, LastSystemVersion);
+       var inputBChanged = chunk.DidChange(InputBType, LastSystemVersion);
+       if (!(inputAChanged || inputBChanged))
+           return;
+      //...
+}
+
+var job = new UpdateJob()
+   {
+        LastSystemVersion = this.LastSystemVersion,
+        //… initialize other fields
+   }
+```
+
+- ForEach with componentsystem：
+
+```c#
+Entities.ForEach( (ref RotationSpeed rotationSpeed, ref RotationQuaternion rotation) =>{
+var deltaTime = Time.deltaTime;
+rotation.Value = math.mul(math.normalize(rotation.Value),
+quaternion.AxisAngle(math.up(), rotationSpeed.RadiansPerSecond * deltaTime));
+});
+
+Entities.WithAll<SpinningTag>().ForEach( (Entity e, ref Rotation r) =>
+{
+    // do stuff
+});
+
+Entities.WithNone<Rotation>().With(EntityQueryOptions.IncludeDisabled).ForEach( (Entity e) =>
+{
+    // do stuff
+});
+```
+
+同时我们还可以手动的遍历，或继承JobComponentSystem用IJobParallelFor之类的接口迭代。
+
+- entity query，构造查询archetype的对象，同时建议我们不要添加可选的component在desc中，因为我们只需对chunk检查一次，不需要对每个entity进行检查：
+
+  ```c#
+  var query = new EntityQueryDesc
+  {
+     None = new ComponentType[]{ typeof(Frozen) },
+     All = new ComponentType[]{ typeof(RotationQuaternion), ComponentType.ReadOnly<RotationSpeed>() }
+  }
+  EntityQuery m_Query = GetEntityQuery(query);
+  ```
+
+  多个desc之间使用or来连接的，同时还提供额外的选项：
+
+  ![option](Introduce.assets/option.PNG)
+
+  还可以通过filter设置sharedcomponentvalue，和filter change的chunk。
+
+  ```c#
+  m_Query = GetEntityQuery(typeof(Position), typeof(Displacement), typeof(SharedGrouping));
+  m_Query.SetFilter(new SharedGrouping { Group = 1 });
+  
+  m_Query.SetFilterChanged(typeof(Translation));
+  ```
+
+  通过ToEntityArray，ToComponentDataArray，CreateArchetypeChunkArray执行查询，或者在job中通过把query传递给schedule，在内部创建出对应的array。
+
+- WriteGroups，主要是用来重写更新某个component的行为。通过query filter配合可以使得entity匹配具有新的更新逻辑的system。
+
+- Version，可以通过version来记录改变。
+
+- Job：
+
+  ![job1](Introduce.assets/job1.PNG)
+
+  ![job2](Introduce.assets/job2.PNG)
 
 ##### 引用
 
