@@ -78,9 +78,39 @@ OK，unity中的ECS的概念上和entitas是一致的。但是，组织和一些
 
 接下来就是详细的介绍各个部分的相关功能：
 
-Entities：entity具有一个ID，
+Entity：持有component的index。
 
-world，组织systems。own entity manager和一个component systems集合。一般创建一个simulation一个render world。
+- entity有一个唯一ID，通过**EntityManager**管理一个world中的所有entity，也维护archetype并管理chunk属数据，archetype是一个EntityArchetype struct，可通过EntityArchetypes中的接口创建archetype。
+
+- entity可以通过把scene中的gameobject convert构建，也可以在spawning system中创建，或者直接调用EntityManager.CreateEntity创建，创建出来的entity与EntityManager在同一个world中。具体的创建方式如下：
+
+  ![createentity](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\createentity.PNG)
+
+- add、remove component会改变entity的archetype并导致数据的移动，所以不能在Job中进行这些操作，需要把这些操作加入到EntityCommandBuffer中，在job执行完毕后再执行CommandBuffer。
+
+- world持有一个EntityManager和**ComponentSystems**，我们可以根据功能划分多个world，如一个simulation(gameplay)+render world，进入play mode会创建一个默认的world并把system注册进去，我们也可以禁止默认world的生成：
+
+  ![worlddefine](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\worlddefine.PNG)
+
+Component：数据的抽象。
+
+- component是实现对应接口的struct。具体有以下接口：
+
+  ![componentinterface](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\componentinterface.PNG)
+
+  不同的component会有不同的存储方式，如shared component和chunk component存储在chunk外，因为component的一个instance被chunk中所有的entity持有，同时可以在chunk外额外分配的dynamic buffer。
+
+- general purpose component——IComponentData，其中不包含托管对象的引用，所有的数据在没有gc的chunk memory中。IComponentData适合per-entity的数据。
+
+- shared component data——ISharedComponentData，提供archetype外另一种组织entity的方式，EntityManager会把具有同样shared value的entity放在一个chunk中，所以shared component可以让我们连续的处理类似的entity。注意频繁的使用shared component会导致chunk的利用率低下，因为有额外的chunk逻辑，也就是会为每个shared component data维护一个chunk，可以使用**Entity Debugger**来查看chunk利用率。shared component适合多个entity共享的数据，如mesh，mat等。
+
+  - 拥有同样shared data的entity在一个chunk中，对应sharedcomponentdata的引用也是被chunk持有，而不是entity。
+  - 可以使用EntityQuery.SetFilter迭代拥有特定ShardComponentData的entities。也可通过EntityManger.GetAllUniqueSharedComponents获取所有的SharedComponentData。
+  - sharedcomponentdata是自动引用计数的，应当尽量少的修改sharedcomponentdata，内部会使用memcpy将chunk data拷贝到另一个chunk。
+
+- system state component——SystemStateComponentData，可用来维护system内部的资源，
+
+
 
 component，general purpose components，shared components(placed in the same chunk)，system state components，dynamic buffer components，chunk components。
 
