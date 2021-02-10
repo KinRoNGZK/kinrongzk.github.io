@@ -367,6 +367,18 @@ Entities.WithNone<Rotation>().With(EntityQueryOptions.IncludeDisabled).ForEach( 
 
   ![job2](Introduce.assets/job2.PNG)
 
+**注意dots中创建销毁entity和修改archetype需要PostCommand或使用CommandBuffer来操作，主要是避免在system中迭代的时候导致集合发生变化，而entitas中是迭代的时候返回的是一个entity集合副本，所以可以在其中进行增删和修改。**
+
+**同时很大的一个区别是对cache friendly和多线程的支持程度，当然这也导致dots在维护chunk和archetype是会相对复杂，同时会有额外的移动消耗。entitas导致内存不连续主要在以下几个方面。**
+
+1. component是class引用类型，所以即使排列在容器中，引用是精密排列的，但是实际的对象可能并不连续，而dots中这是struct。
+2. entity是class引用类型，导致取出来的遍历entity集合可能内存不连续。在dots中同样entity也是struct，加上reference reture也不会有额外的拷贝。
+3. 是以component来进行缓存的，所以当多个不同archetype entity都用到某个component时某个entity对应的component必然不一在component pool中连续，所以遍历的时候很有可能内存不连续。而dots中，同一个archetype的component必定在连续chunks中。
+
+**最后就是为了最大限度的提高dots的优势，unity扩展了很多的job接口做并行化，entitas中需要自己通过相应的c# thread pool进行实现，同时unity也推出了native array和burst编译以及新的数学库相关功能。同时还提供将原生gameobject转换到dots中的接口。**
+
+**除了上述的有点，ecs还有一个巨大的好处就是实例化entity比起gameobject快多了，因为只是内存的拷贝就够了，避免了实例化的两大开销，第一实例化后脚本的各种回调，第二gameobject实例化本身produce的开销。测试下来dots实例化25000个gameobject 0 gc，1ms，而原生实例化3m gc，400ms。**
+
 ##### 引用
 
 [1]https://zhuanlan.zhihu.com/p/78783892
