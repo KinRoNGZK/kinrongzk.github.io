@@ -84,19 +84,19 @@ Entity：持有component的index。
 
 - entity可以通过把scene中的gameobject convert构建，也可以在spawning system中创建，或者直接调用EntityManager.CreateEntity创建，创建出来的entity与EntityManager在同一个world中。具体的创建方式如下：
 
-  ![createentity](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\createentity.PNG)
+  ![createentity](Introduce.assets\createentity.PNG)
 
 - add、remove component会改变entity的archetype并导致数据的移动，所以不能在Job中进行这些操作，需要把这些操作加入到EntityCommandBuffer中，在job执行完毕后再执行CommandBuffer。
 
 - world持有一个EntityManager和**ComponentSystems**，我们可以根据功能划分多个world，如一个simulation(gameplay)+render world，进入play mode会创建一个默认的world并把system注册进去，我们也可以禁止默认world的生成：
 
-  ![worlddefine](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\worlddefine.PNG)
+  ![worlddefine](Introduce.assets\worlddefine.PNG)
 
 Component：数据的抽象。
 
 - component是实现对应接口的struct。具体有以下接口：
 
-  ![componentinterface](A:\github\kinrongzk.github.io\blog\CodeRead\ECS\Introduce.assets\componentinterface.PNG)
+  ![componentinterface](Introduce.assets\componentinterface.PNG)
 
   不同的component会有不同的存储方式，如shared component和chunk component存储在chunk外，因为component的一个instance被chunk中所有的entity持有，同时可以在chunk外额外分配的dynamic buffer。
 
