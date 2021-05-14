@@ -18,7 +18,7 @@ ECS是一种设计思想，与传统OOP相对。传统OOP是抽象成逻辑上�
 
 ##### Entitas架构和使用
 
-![entitas](introduce.assets/entitas.PNG)
+![entitas](Introduce.assets/entitas.PNG)
 
 entitas的架构如上图，上面包含了核心的**context**，**entity**和**component**，加上**system**就构成了完整的entitas了。下面结合使用对其逐一讲解。
 
@@ -36,13 +36,13 @@ TestEntity是生成的entity，继承自entitas中的entity，主要是给entity
 
 component，终于轮到component了，component生成的partial entity和mather以及Lookup类前面都讲过了。component通过entity c#的activator反射工厂模式创建，也就是创建我们编写的类，然后直接访问和修改里面的属性。所以private属性不会生成对应代码。同时除了entity的标签，component还支持其他的标签类型[6]。
 
-![attribute](introduce.assets/attribute.PNG)
+![attribute](Introduce.assets/attribute.PNG)
 
 Contexts维护所有的context，也是外部交互的入口，有些辅助方法如PrimaryEntityIndex标识生成的方法就放在ContextsExtensions中，同时会生成PrimaryEntityIndex用来维护一个唯一映射的dict，同样EntityIndex维护一个key-hashset的结构，同时支持事件生成的方式来和外部系统通信。
 
 system[7]，主要有5个不同的system接口(ReactiveSystem是通过继承来实现)，通过实现和组合这些接口实现需要的system。
 
-![system](introduce.assets/system.PNG)
+![system](Introduce.assets/system.PNG)
 
 5个接口分别是，IInitializeSystem，类似monobehaviour在lifetime中执行一次，可用于做一些初始化。IExecuteSytem类似update方法，每帧调用一次。ICleanupSystem在每帧的最后调用，类似OnEndOfTheFrame确保前面的逻辑都走完，这儿是保证execute system和reactive system执行完毕。ITearDownSystem，在程序退出前执行，类似OnAppliactionQuit做一些资源卸载工作等。ReactiveSystem用来监听Group的改变，筛选出component data改变的entity做出响应，同时需要绑定context，需要注意的是ReactiveSystem和ExecuteSystem是不能组合的。如果要对多个context做出响应可以使用MultiReactiveSystem，要让不同context下的entity有同样的抽象实现同样的接口，所以需要抽象出新的接口。最后Features给了我们一个组织system的抽象，我们可以按照不同的逻辑group system，不同的system会按照加入到systems中的顺序执行。但是system内部对component的操作不应该有互相依赖。
 
